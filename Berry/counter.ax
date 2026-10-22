@@ -1,0 +1,59 @@
+# @name Patients
+# @desc Right adds, left subtracts. The count survives restarts.
+# @version 1.1
+# @config count number "Counter value" default=0 min=0 max=999999 step=1
+# @config step number "Amount per press" default=1 min=1 max=999999 step=1
+# @config seconds number "Display time" default=10 min=3 max=120 unit=s
+# @config tint color "Tooth colour" default=#00DDBB
+
+class Counter
+  var count, step, label
+
+  def init()
+    self.count = int(clamp(num(store.get("count"), 0), 0, 999999))
+    self.step = int(clamp(num(store.get("step"), 1), 1, 999999))
+    self.label = str(self.count)
+  end
+
+  def on_button(btn)
+    var next = self.count
+    if btn == "right"
+      next = min(self.count + self.step, 999999)
+    elif btn == "left"
+      next = max(self.count - self.step, 0)
+    else
+      return false
+    end
+    if next != self.count
+      self.count = next
+      self.label = str(self.count)
+      store.set("count", self.count)
+    end
+    return true
+  end
+
+  def duration() return int(store.get("seconds")) * 1000 end
+
+  def draw()
+    clear()
+    var colour = store.get("tint")
+    line(1, 0, 2, 0, colour)
+    line(4, 0, 5, 0, colour)
+    line(0, 1, 0, 3, colour)
+    line(6, 1, 6, 3, colour)
+    line(1, 4, 1, 6, colour)
+    line(5, 4, 5, 6, colour)
+    pixel(2, 7, colour)
+    pixel(4, 7, colour)
+    line(3, 4, 3, 6, colour)
+    pixel(3, 1, colour)
+    font("large")
+    if text_ink_width(self.label) > width() - 9
+      font("small")
+    end
+    text(9 + (width() - 9 - text_ink_width(self.label)) / 2, height() - 2,
+         self.label, settings.get("textColor"))
+  end
+end
+
+return Counter()

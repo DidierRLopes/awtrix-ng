@@ -1,0 +1,124 @@
+# @name Lancy Outdoor
+# @desc Outdoor temperature and day/night weather for the practice.
+# @version 1.3
+# Weather: MET Norway Locationforecast, https://api.met.no/ (CC BY 4.0).
+# https://creativecommons.org/licenses/by/4.0/ - temperature rounded for display.
+# @config lat text "Latitude" default="46.1744"
+# @config lon text "Longitude" default="6.1172"
+# @config every number "Weather refresh" default=60 min=60 max=120 unit=min
+# @config seconds number "Display time" default=10 min=3 max=60 unit=s
+# @config sun color "Sun colour" default=#FFCC33
+# @config moon color "Moon colour" default=#C9DFFF
+# @config cloud color "Cloud and fog colour" default=#BBBBBB
+# @config rain color "Rain colour" default=#3399FF
+
+class Outdoor
+  var url, ticks, busy, label, seen, received, options, icons, layers
+  def init()
+    self.url = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=" +
+               store.get("lat") + "&lon=" + store.get("lon")
+    self.label = store.get("source") == self.url ? store.get("label", "--°C") : "--°C"
+    self.seen = store.get("seen", -1)
+    self.received = -1
+    if type(self.label) != "string" self.label = "--°C" end
+    if type(self.seen) != "int" self.seen = -1 end
+    self.ticks = 0
+    self.busy = false
+    self.options = {"find": "\"timeseries\":", "keep": 1024,
+      "headers": {"User-Agent": "SemaillesDentalClock/1.0 https://semaillesdental.ch"}}
+    var sun = store.get("sun")
+    var moon = store.get("moon")
+    var cloud = store.get("cloud")
+    var rain = store.get("rain")
+    var front = [[0, 0, 0, 12, 30, 127, 255, 126], cloud]
+    self.icons = {
+      "sun": [[[24, 66, 24, 189, 189, 24, 66, 24], sun]],
+      "moon": [[[60, 120, 240, 224, 224, 240, 120, 60], moon]],
+      "partly_day": [[[16, 84, 56, 124, 56, 0, 0, 0], sun], front],
+      "partly_night": [[[60, 120, 112, 96, 112, 0, 0, 0], moon], front],
+      "cloud": [[[0, 48, 120, 254, 255, 126, 0, 0], cloud]],
+      "rain": [[[16, 16, 56, 56, 124, 124, 56, 16], rain]],
+      "snow": [[[73, 42, 28, 127, 28, 42, 73, 0], settings.get("textColor")]],
+      "storm": [[[24, 60, 126, 255, 0, 0, 0, 0], cloud],
+                 [[0, 0, 0, 0, 24, 48, 24, 16], sun]],
+      "fog": [[[0, 126, 0, 60, 0, 126, 0, 0], cloud]],
+      "unknown": [[[60, 66, 2, 12, 16, 0, 16, 0], cloud]]
+    }
+    self.layers = self.icons["unknown"]
+    if store.get("source") == self.url
+      self.choose(store.get("condition", ""))
+    end
+  end
+  def choose(code)
+    var kind = "unknown"
+    if type(code) == "string"
+      var night = re.search("_night$", code) != nil
+      if re.search("thunder", code) != nil kind = "storm"
+      elif re.search("snow|sleet", code) != nil kind = "snow"
+      elif re.search("rain|drizzle", code) != nil kind = "rain"
+      elif code == "fog" kind = "fog"
+      elif re.search("^clearsky", code) != nil kind = night ? "moon" : "sun"
+      elif re.search("^(fair|partlycloudy)", code) != nil
+        kind = night ? "partly_night" : "partly_day"
+      elif code == "cloudy" kind = "cloud"
+      end
+    end
+    self.layers = self.icons[kind]
+  end
+  def receive(body, status)
+    self.busy = false
+    if body == nil || (status != 200 && status != 203) return end
+    # Ignore later forecast entries if the short response window reaches another hour.
+    var first = re.search("^(.+?)\\},\\{\\s*\"time\"", body)
+    if first != nil body = first[1] end
+    var match = re.search("\"air_temperature\":\\s*(-?[0-9.]+)", body)
+    if match == nil return end
+    var value = num(match[1])
+    if value == nil || value < -80 || value > 60 return end
+    var condition = re.search("\"next_1_hours\"\\s*:\\s*\\{\\s*\"summary\"\\s*:\\s*\\{\\s*\"symbol_code\"\\s*:\\s*\"([^\"]+)\"", body)
+    if condition == nil
+      condition = re.search("\"next_6_hours\"\\s*:\\s*\\{\\s*\"summary\"\\s*:\\s*\\{\\s*\"symbol_code\"\\s*:\\s*\"([^\"]+)\"", body)
+    end
+    var code = condition == nil ? "" : condition[1]
+    self.choose(code)
+    self.label = str(round(value)) + "°C"
+    self.seen = epoch_ms()
+    self.received = now_ms()
+    self.ticks = int(store.get("every")) * 60
+    store.set("source", self.url)
+    store.set("label", self.label)
+    store.set("seen", self.seen)
+    store.set("condition", code)
+  end
+  def loop()
+    if self.ticks <= 0 && !self.busy
+      self.busy = true
+      self.ticks = 300
+      http.get(self.url, / body, status -> self.receive(body, status), self.options)
+    end
+    self.ticks -= 1
+  end
+  def duration() return int(store.get("seconds")) * 1000 end
+  def draw()
+    clear()
+    var label = self.label
+    var layers = self.layers
+    # Fresh responses use elapsed boot time, even before NTP has synchronized.
+    var age = self.received >= 0 ? now_ms() - self.received : epoch_ms() - self.seen
+    if (self.received < 0 && self.seen < 0) || age > 10800000
+      label = "--°C"
+      layers = self.icons["unknown"]
+    end
+    for layer : layers
+      for y : 0 .. 7
+        for x : 0 .. 7
+          if layer[0][y] & (128 >> x) pixel(x, y, layer[1]) end
+        end
+      end
+    end
+    text(9 + (width() - 9 - text_ink_width(label)) / 2, height() - 2,
+         label, settings.get("textColor"))
+  end
+end
+
+return Outdoor()

@@ -17,6 +17,8 @@
 
 </div>
 
+This fork includes the [Semailles Dental display setup](Berry/README.md) for a Ulanzi TC001.
+
 ---
 
 AWTRIX NG turns an affordable LED pixel clock into a small display for your home. It shows the

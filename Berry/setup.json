@@ -1,0 +1,18 @@
+{
+  "system": {
+    "tz": "CET-1CEST,M3.5.0,M10.5.0/3",
+    "tzName": "Europe/Zurich"
+  },
+  "settings": {
+    "appDurationMs": 60000,
+    "timeMode": 1,
+    "time24h": true,
+    "timeShowSeconds": false,
+    "timeShowAmPm": false,
+    "useCelsius": true
+  },
+  "apps": {
+    "order": ["semailles", "counter", "Time", "outdoor"],
+    "disabled": ["Date", "Temperature", "Humidity", "Battery"]
+  }
+}

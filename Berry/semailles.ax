@@ -1,0 +1,30 @@
+# @name Semailles Dental
+# @desc The practice name and website, scrolling once per rotation.
+# @version 1.1
+# @config name text "Practice name" default="SEMAILLES DENTAL" maxlen=64
+# @config website text "Website" default="semaillesdental.ch" maxlen=64
+# @config tint color "Name colour" default=#00DDBB
+# @config website_colour color "Website colour" default=#FFFFFF
+# @config speed slider "Scroll speed" default=80 min=40 max=150 unit=%
+
+class Semailles
+  var message, options, done
+  def init()
+    self.message = [[store.get("name"), store.get("tint")],
+                    ["  " + store.get("website"), store.get("website_colour")]]
+    self.options = {"repeat": 1, "mode": "wrap", "speed": store.get("speed"), "holdMs": 1000}
+    self.done = false
+  end
+  def on_show() self.done = false end
+  def draw()
+    clear()
+    if self.done return end
+    if scroll_text(self.message, settings.get("textColor"), self.options) > 0
+      clear()
+      self.done = true
+      rotation.next()
+    end
+  end
+end
+
+return Semailles()
